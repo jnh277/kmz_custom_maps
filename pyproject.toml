@@ -1,14 +1,15 @@
 [build-system]
 build-backend = "setuptools.build_meta"
-requires = ["setuptools>=61.0", "setuptools-git-versioning<2"]
+requires = ["setuptools>=61.0"]
 
 [project]
-dynamic = ["dependencies", "version"]
+dynamic = ["dependencies"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT",
     "Operating System :: OS Independent",]
 description = "River forecasting package"
+version = "0.1.0"
 name = "kmz_custom_maps"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -21,5 +22,3 @@ include = ["kmz_custom_maps"]
 exclude = ["test_data"]
 [tool.setuptools.dynamic]
 dependencies = {file=["requirements.txt"]}
-[tool.setuptools-git-versioning]
-enabled = true

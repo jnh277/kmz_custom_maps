@@ -247,8 +247,26 @@ def process(file_path: str, combine: Optional[bool]=True, max_pixels: Optional[i
 
 
 if __name__=="__main__":
-    combine = True
+    import argparse
+    # combine = True
+    # file_path = "test_data/Bellingen-nsw-six-maps.kmz"
+    # process(file_path)
 
-    file_path = "test_data/Bellingen-nsw-six-maps.kmz"
-    process(file_path)
+    parser = argparse.ArgumentParser(description="Input arguments for kmz custom maps",
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+
+    parser.add_argument("src", help="Path to kmz file to process")
+    parser.add_argument("-s", "--separate", action="store_true",
+                        help="save as separate map files rather than combining")
+    parser.add_argument("--max_pixels", type=int, default=MAX_PIXELS,
+                        help="maximum pixel height and width of separated jpegs")
+
+    args = parser.parse_args()
+    config = vars(args)
+
+    file_path = config["src"]
+    combine = ~config["separate"]
+    max_pixels = config["max_pixels"]
+
+    process(file_path, combine, max_pixels)
 

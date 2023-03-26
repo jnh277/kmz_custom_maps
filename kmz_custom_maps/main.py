@@ -7,10 +7,9 @@ import numpy as np
 import zipfile
 import shutil
 import copy
+from typing import Optional
 
 MAX_FILE_SIZE = 3
-EXPAND = 1
-
 
 MAX_PIXELS = 1024
 
@@ -149,13 +148,8 @@ def read_kmz(file_path: str)-> (str, Image):
     return kml_data, img, kmz.compression, kmz.compresslevel
 
 
-if __name__=="__main__":
-    combine = True
-
-    file_path = "test_data/Bellingen-nsw-six-maps.kmz"
-    # file_path = "test_data/test.kmz"
+def process(file_path: str, combine: Optional[bool]=True, max_pixels: Optional[int]=MAX_PIXELS):
     kml_data, img, compression, compresslevel = read_kmz(file_path)
-
     kml_doc = KML_doc(kml_string=kml_data)
 
     orig_latlonbox = kml_doc.get_latlonbox()
@@ -163,16 +157,11 @@ if __name__=="__main__":
     orig_name = kml_doc.get_name()
 
 
-    # kml_doc.print()
-
     orig_img_size = img.size
     orig_img_height = orig_img_size[1]
     orig_img_width = orig_img_size[0]
 
-    num_maps, map_cols, map_rows = calc_map_grid(orig_img_size, max_pixels=MAX_PIXELS)
-
-    map_height = int(np.ceil(orig_img_height / map_rows))
-    map_width = int(np.ceil(orig_img_width / map_cols))
+    num_maps, map_cols, map_rows = calc_map_grid(orig_img_size, max_pixels=max_pixels)
 
     img_heights = []
     for r in range(map_rows):
@@ -219,12 +208,6 @@ if __name__=="__main__":
     if combine:
         kml_doc.create_folder()
         for i, map in enumerate(maps):
-            # if i==0:
-            #     kml_doc.update_latlonbox(map["latlonbox"])
-            #     kml_doc.update_img_name(map["img_name"])
-            #     kml_doc.update_name(map["name"])
-            # else:
-            #     kml_doc.add_ground_overlay(map["name"], map["img_name"], map["latlonbox"], index=i)
             kml_doc.add_ground_overlay(map["name"], map["img_name"], map["latlonbox"])
 
 
@@ -257,7 +240,15 @@ if __name__=="__main__":
                 map["image"].save(map["img_name"], quality=95, optimize=True, progression=False)
                 zf.write(map["img_name"], map["img_name"])
 
-        try:
-            shutil.rmtree("./files")
-        except FileNotFoundError:
-            pass
+    try:
+        shutil.rmtree("./files/")
+    except FileNotFoundError:
+        pass
+
+
+if __name__=="__main__":
+    combine = True
+
+    file_path = "test_data/Bellingen-nsw-six-maps.kmz"
+    process(file_path)
+

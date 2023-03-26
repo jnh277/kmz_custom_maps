@@ -1,8 +1,3 @@
-# This is a sample Python script.
-import os.path
-# Press ⌃R to execute it or replace it with your code.
-# Press Double ⇧ to search everywhere for classes, files, tool windows, actions, and settings.
-
 import os
 from zipfile import ZipFile
 from PIL import Image
@@ -11,6 +6,7 @@ from lxml import html
 import numpy as np
 import zipfile
 import shutil
+import copy
 
 MAX_FILE_SIZE = 3
 EXPAND = 1
@@ -31,8 +27,8 @@ def calc_map_grid(original_image_size: tuple[int, int], max_pixels:int):
 class KML_doc():
     def __init__(self, kml_string):
         doc = html.fromstring(kml_string)
-        ground_overlay = doc.cssselect('GroundOverlay')[0]
         name = doc.cssselect("name")[0]
+        ground_overlay = doc.cssselect('GroundOverlay')[0]
         href = ground_overlay.cssselect("Icon href")[0]
         latlonbox = ground_overlay.cssselect("LatLonBox")[0]
         north = latlonbox.cssselect("north")[0]
@@ -40,6 +36,7 @@ class KML_doc():
         east = latlonbox.cssselect("east")[0]
         west = latlonbox.cssselect("west")[0]
 
+        self.ground_overlay = ground_overlay
         self.name = name
         self.doc = doc
         self.img_name = href
@@ -47,6 +44,8 @@ class KML_doc():
         self.south = south
         self.west = west
         self.east = east
+
+        self.folder = None
 
     def get_latlonbox(self) -> dict:
         latlonbox = {
@@ -76,6 +75,45 @@ class KML_doc():
     def update_img_name(self, img_name: str):
         self.img_name.text = img_name
 
+    def create_folder(self):
+        # <Folder>
+        # 	<name>blah</name>
+        # 	<open>1</open>
+        self.ground_overlay_copy = copy.deepcopy(self.ground_overlay)
+        self.doc.remove(self.ground_overlay)
+        self.doc.append(html.Element("folder"))
+        self.folder = self.doc.cssselect("folder")[0]
+        self.folder.append(html.Element("name"))
+        self.folder_name = self.folder.cssselect("name")[0]
+        self.folder_name.text = self.name.text + "_folder"
+        self.folder.append(html.Element("open"))
+        self.folder_open = self.folder.cssselect("open")[0]
+        self.folder_open.text = str(1)
+
+
+    def add_ground_overlay(self, name: str, image_name: str, latlonbox: dict, index: int=1):
+        assert self.folder is not None, "create folder first"
+        new_ground_overlay = copy.deepcopy(self.ground_overlay_copy)
+        href = new_ground_overlay.cssselect("Icon href")[0]
+        latlonbox_el = new_ground_overlay.cssselect("LatLonBox")[0]
+        north = latlonbox_el.cssselect("north")[0]
+        south = latlonbox_el.cssselect("south")[0]
+        east = latlonbox_el.cssselect("east")[0]
+        west = latlonbox_el.cssselect("west")[0]
+
+        name_el = new_ground_overlay.cssselect("name")[0]
+        name_el.text = name
+
+        north.text = str(latlonbox["north"])
+        south.text = str(latlonbox["south"])
+        east.text = str(latlonbox["east"])
+        west.text = str(latlonbox["west"])
+
+        href.text = image_name
+
+        # self.ground_overlay_list.append(new_ground_overlay)
+        self.folder.append(new_ground_overlay)
+
 
     def to_kml_string(self):
         kml_str = html.tostring(self.doc).replace(b"groundoverlay",b"GroundOverlay")
@@ -83,6 +121,12 @@ class KML_doc():
         kml_str = kml_str.replace(b"viewboundscale", b"viewBoundScale")
         kml_str = kml_str.replace(b"icon", b"Icon")
         kml_str = kml_str.replace(b"latlonbox", b"LatLonBox")
+        kml_str = kml_str.replace(b"folder", b"Folder")
+        # kml_str = kml_str.replace(b"</Folder>", b"</Folder>\n")
+        kml_str = kml_str.replace(b"Folder>", b"Folder>\n")
+        kml_str = kml_str.replace(b"Folder</name>", b"Folder</name>\n")
+        kml_str = kml_str.replace(b"</open>", b"</open>\n")
+
 
         return kml_str
 
@@ -106,14 +150,20 @@ def read_kmz(file_path: str)-> (str, Image):
 
 
 if __name__=="__main__":
+    combine = True
+
     file_path = "test_data/Bellingen-nsw-six-maps.kmz"
+    # file_path = "test_data/test.kmz"
     kml_data, img, compression, compresslevel = read_kmz(file_path)
 
-
     kml_doc = KML_doc(kml_string=kml_data)
+
     orig_latlonbox = kml_doc.get_latlonbox()
     orig_image_name = kml_doc.get_image_name()
     orig_name = kml_doc.get_name()
+
+
+    # kml_doc.print()
 
     orig_img_size = img.size
     orig_img_height = orig_img_size[1]
@@ -166,25 +216,48 @@ if __name__=="__main__":
     except FileExistsError:
         pass
 
-    for map in maps:
-        kml_doc.update_latlonbox(map["latlonbox"])
-        kml_doc.update_img_name(map["img_name"])
-        kml_doc.update_name(map["name"])
+    if combine:
+        kml_doc.create_folder()
+        for i, map in enumerate(maps):
+            # if i==0:
+            #     kml_doc.update_latlonbox(map["latlonbox"])
+            #     kml_doc.update_img_name(map["img_name"])
+            #     kml_doc.update_name(map["name"])
+            # else:
+            #     kml_doc.add_ground_overlay(map["name"], map["img_name"], map["latlonbox"], index=i)
+            kml_doc.add_ground_overlay(map["name"], map["img_name"], map["latlonbox"])
+
 
         kml_str = kml_doc.to_kml_string()
-
-
-
-        with zipfile.ZipFile(map["name"]+".kmz", 'w',
+        with zipfile.ZipFile(orig_name + ".kmz", 'w',
                              compression=compression,
                              compresslevel=compresslevel) as zf:
             with zf.open("doc.kml", 'w') as f:
                 f.write(kml_str)
+            for map in maps:
+                map["image"].save(map["img_name"], quality=95, optimize=True, progression=False)
+                zf.write(map["img_name"], map["img_name"])
 
-            map["image"].save(map["img_name"], quality=95, optimize=True, progression=False)
-            zf.write(map["img_name"], map["img_name"])
+    else:
+        for map in maps:
+            kml_doc.update_latlonbox(map["latlonbox"])
+            kml_doc.update_img_name(map["img_name"])
+            kml_doc.update_name(map["name"])
 
-    try:
-        shutil.rmtree("./files")
-    except FileNotFoundError:
-        pass
+            kml_str = kml_doc.to_kml_string()
+
+
+
+            with zipfile.ZipFile(map["name"]+".kmz", 'w',
+                                 compression=compression,
+                                 compresslevel=compresslevel) as zf:
+                with zf.open("doc.kml", 'w') as f:
+                    f.write(kml_str)
+
+                map["image"].save(map["img_name"], quality=95, optimize=True, progression=False)
+                zf.write(map["img_name"], map["img_name"])
+
+        try:
+            shutil.rmtree("./files")
+        except FileNotFoundError:
+            pass
